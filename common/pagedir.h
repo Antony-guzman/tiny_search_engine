@@ -9,6 +9,12 @@
 #include "webpage.h"
 
 /**************** Functions ****************/
+/**************** pagedir_init ****************/
+/* pagedir_init - set up the pageDirectory.
+ * Our approach is simple: we create a file ".crawler" there.
+ * Return true if success. 
+ */
+bool pagedir_init(const char *pageDirectory);
 
 /**************** pagesaver ****************/
 /* Create a file (for crawler) containning info from 
@@ -18,14 +24,15 @@
  *   valid pointer to a webpage, valid string for a directory
  * , valid integer.
  * We do:
- *   if any parameters is NULL, return false
+ *   if any parameters is NULL, nothing
  *   otherwise, save the URL of a page as the first line of the file
  *   the depth of the page as the second line
  *   and the rest is the HMTL of the webpage
  *   the filename will be the ID configured by crawler
  *    
  */
-bool  pagesaver(webpage_t *page, char *pageDir, int ID);
+void 
+page_save(const webpage_t *page, const char *pageDirectory, const int documentID);
 
 /**************** page_validate ****************/
 /* Validates if given directory was produced by crawler.

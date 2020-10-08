@@ -24,6 +24,7 @@ $(LIB): $(OBJS)
 pagedir.o: $L/webpage.h pagedir.h $L/file.h
 index.o:  $L/webpage.h index.h $L/hashtable.h $L/counters.h
 index.o:  $L/file.h $L/memory.h pagedir.h word.h
+word.o: word.h
 
 # list all the sources and docs in this directory
 sourcelist: Makefile *.md *.c *.h

@@ -11,9 +11,9 @@ OBJS = crawler.o
 LIBS = $(L)/libcs50.a $(C)/common.a 
 
 # uncomment the following to turn on verbose memory logging
-# TESTING=-DMEMTEST
+FLAGS = # -DAPPTEST # -DMEMTEST
 
-CFLAGS = -Wall -pedantic -std=c11 -ggdb $(TESTING) -I$L  -I$C
+CFLAGS = -Wall -pedantic -std=c11 -ggdb $(FLAGS) -I$L  -I$C
 CC = gcc
 MAKE = make
 

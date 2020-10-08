@@ -9,7 +9,9 @@
  * as a key. 
  * 
  */
+#include <stdio.h>
 #include <stdbool.h>
+#include "hashtable.h"
 #include "counters.h"
 
 /**************** global types ****************/

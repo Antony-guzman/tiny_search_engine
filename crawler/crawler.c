@@ -21,125 +21,190 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
-#include <unistd.h>
-#include <dirent.h>
+#include <ctype.h>
+#include "webpage.h"
+#include "pagedir.h"
 #include "bag.h"
 #include "hashtable.h"
-#include "webpage.h"
-#include <sys/stat.h>
-#include "pagedir.h"
 #include "memory.h"
+/**************** file-local global variables ****************/
+static const int maxMaxDepth = 10;
+
+/**************** local function prototypes ****************/
+/* not visible outside this file */
+static void parse_args(const int argc, char *argv[], 
+                       char **seedURL, char **pageDirectory, int *maxDepth);
+static void crawler(char *seed, char *pageDirectory, int maxDepth);
+static void page_scan(webpage_t *page, bag_t *to_crawl, hashtable_t *seen);
+
+// log one word (1-9 chars) about a given url
+inline static void logr(const char *word, const int depth, const char *url)
+{
+#ifdef APPTEST
+  printf("%2d %*s%9s: %s\n", depth, depth, "", word, url);
+#else
+  ;
+#endif
+}
+/**************** parse_args ****************/
+/* Parse the command-line arguments, filling in the parameters;
+ * if any error, print to stderr and exit.
+ */
+static void
+parse_args(const int argc, char *argv[], 
+           char **seedURL, char **pageDirectory, int *maxDepth)
+{
+  /**** usage ****/
+  char *program = argv[0];
+  if (argc != 4) {
+    fprintf(stderr, "usage: %s: seedURL pageDirectory maxDepth\n", program);
+    exit (1);
+  }
+
+  /**** seedURL ****/
+  *seedURL = argv[1];
+  if (!NormalizeURL(*seedURL)) {
+    fprintf(stderr, "usage: %s: un-normalizable seedURL '%s'\n", 
+            program, *seedURL);
+    exit (2);
+  }
+  if (!IsInternalURL(*seedURL)) {
+    fprintf(stderr, "usage: %s: non-internal seedURL '%s'\n", 
+            program, *seedURL);
+    exit (3);
+  }
+  
+  /**** pageDirectory ****/ 
+  *pageDirectory = argv[2];
+  if (!pagedir_init(*pageDirectory)) {
+    fprintf(stderr, "usage: %s: invalid or unwritable directory '%s'\n", 
+            program, *pageDirectory);
+    exit (4);
+  }
+
+  /**** maxDepth ****/
+  char *maxDepthString = argv[3];
+  char excess; // any characters seen after an integer
+  if (sscanf(maxDepthString, "%d%c", maxDepth, &excess) != 1) {
+    fprintf(stderr, "usage: %s: invalid maxDepth '%s'\n", 
+            program, maxDepthString);
+    exit (5);
+  }
+
+  if (*maxDepth < 0 || *maxDepth > maxMaxDepth) {
+    fprintf(stderr, "usage: %s: maxDepth '%d' must be in range [0:%d]\n",
+            program, *maxDepth, maxMaxDepth);
+    exit (6);
+  } 
+}
 
 
-#define MEMTEST true
-void crawler(char *seed, char *pageDirectory, int maxDepth);
-
+/**************** main ****************/
 //  parses parameters and passes them to the crawler.
 int main(int argc, char* argv[])
 {
+   // crawler parameters from the command line
+   char *seedURL = NULL;
+   char *dir_name = NULL;
+   int maxDepth = 0;
 
-    // check command line arguments
-    // Make sure that there are the right number of arguments
-    if (argc != 4) {
-        fprintf(stdout, "You must supply 3 arguments.\n");
-        printf("The first argument is the seed URL. \n The second argument is the target directory. \n"
-            "The third argument is the max depth which to crawl.\n");
-        exit(1);
-    }
-
-   // check the directory 
-   char* dir_name = argv[2];
-   struct stat dir;
-   if (stat(dir_name,&dir) != 0 ||  access(dir_name,W_OK) != 0){
-	   fprintf(stdout," You must supply an existing and writebale directory. \n");
-	   exit(1);	   
-      
-   }
-
-    // check the Max-Depth parameters
-    int Max_Depth = atoi(argv[3]);
-    if (Max_Depth < 0){
-	    fprintf(stdout, "The depth of the crawler must be a non negative integer. \n");
-	    exit(1);
-    }
-
-   //create an file to ensure that it is a crawler produced direcoty
-   FILE *fp;
-   char filename[10];
-   sprintf(filename, "%s/.crawler",dir_name);
-   fp = fopen(filename, "w");
-   fclose(fp);
-
-   // check whether seedURL submitted is the 'correct' one for this program (is it internal)
-   char *seedURL = argv[1];
-   if (!IsInternalURL(seedURL)){
-	fprintf(stdout, "The seedURL must be internal \n");
-	exit(1);
-   }
+   parse_args(argc, argv, &seedURL, &dir_name, &maxDepth);
+   
    // pass the parameters to the crawler
-   crawler(seedURL, dir_name, Max_Depth);
+   crawler(seedURL, dir_name, maxDepth);
+
+   //exit success
+   return 0;
 
 }
 
 //uses a bag to track pages to explore, and hashtable to track pages seen;
 // when it explores a page it gives the page URL to the pagefetcher, then the 
-// result to pagesaver, then to the pagescanner
-void crawler(char *seed, char *pageDirectory, int maxDepth){
+// result to page_sav, then to the pagescanner
+void crawler(char *seedURL, char *pageDirectory, int maxDepth)
+{
 
-   //check the seed and make baseurl (check if crawling websites are internal)
-   hashtable_t *table = hashtable_new(100);
-   bag_t *bag = bag_new();
+   // allocate data structures
+   bag_t *pages_to_crawl = bag_new();
+   assertp(pages_to_crawl, "pages_to_crawl");
+   const int TableSize = 200;
+   hashtable_t *pages_seen = hashtable_new(TableSize);
+   assertp(pages_seen, "pages_seen");
 
+   // malloc a copy of the seedURL to store in the webpage_t below
+   char *seedcopy = malloc(strlen(seedURL)+1);
+   strcpy(seedcopy, seedURL);
 
-   //insert seed to start crawling
-   char *copy = malloc(strlen(seed) +1);
-   strcpy(copy,seed);
-   webpage_t *seedpage = webpage_new(copy, 0, NULL);
-   bag_insert(bag, seedpage);
-   hashtable_insert(table, seed, " ");
+   // initialize a WebPage representing the seed URL at depth 0, and add to bag
+   bag_insert(pages_to_crawl, webpage_new(seedcopy, 0, NULL));
+   // insert seedURL to hashtable; the 'item' value is unused. 
+   hashtable_insert(pages_seen, seedURL, "seed"); 
 
-   webpage_t *current_webpage;
-   int depthID = 1;
-   while ((current_webpage = bag_extract(bag))!= NULL){
-	   if(webpage_fetch(current_webpage)){
-             if ((pagesaver(current_webpage,pageDirectory, depthID) == false)){
-			    fprintf(stdout,"error: page not saved\n");
-			     }	   
-	   }
-	   else{
-	    fprintf(stdout,"error: page not fetched\n");
-	   }
-	   if (webpage_getDepth(current_webpage) < maxDepth){
-		int pos =0;
-		char *result;
-
-		while((result = webpage_getNextURL(current_webpage, &pos)) != NULL){
-		     if(IsInternalURL(result)== false){
-			    count_free(result);
-
-		     }
-		     else{
-			     if (hashtable_insert(table, result, &depthID) == true){
-			     char *copy = malloc(strlen(result) +1);
-			     strcpy(copy,result);
-			     webpage_t *new = webpage_new(copy,depthID ,NULL);
-			     bag_insert(bag, new);
-			     }
-			     count_free(result);
-		     }
-		     }	     
-		     
-		 
-		}
-	   
-	   webpage_delete(current_webpage);
-	    
-	   depthID++;
-   		
+   // initialize our document ID series
+   int documentID = 0;
+   // start crawling!
+   webpage_t *page;
+   while ( (page = bag_extract(pages_to_crawl)) != NULL) {
+      // fetch the page, filling in page's html
+      if (webpage_fetch(page)) {
+         // save the fetched page to a file
+         page_save(page, pageDirectory, ++documentID);
+      
+      //    // if we should explore another level, ...
+         if (webpage_getDepth(page) < maxDepth) {
+            // scan the page to extract URLs and put them in the bag
+            page_scan(page, pages_to_crawl, pages_seen);
+         }
+      } 
+      // // finished with this web page
+      webpage_delete(page);
    }
-  hashtable_delete(table,NULL);
-  bag_delete(bag,webpage_delete);
+  // clean up
+  hashtable_delete(pages_seen, NULL);
+  bag_delete(pages_to_crawl, webpage_delete);
+  #ifdef MEMTEST
+  // report on our own memory use
+  count_report(stdout, "crawler");
+#endif
 
 }
+
+/**************** page_scan ****************/
+/* Scan the given page to extract any links (URLs); for any not 
+ * already seen before, add them to the bag of pages yet to crawl.
+ */
+static void
+page_scan(webpage_t *page, bag_t *pages_to_crawl, hashtable_t *pages_seen)
+{
+  assertp(page, "page_scan page==NULL");
+  assertp(pages_to_crawl, "page_scan pages_to_crawl==NULL");
+  assertp(pages_seen, "page_scan pages_seen==NULL");
+
+
+  // extract URLs from the page, and consider each in turn
+  char *url = NULL;        // will be filled with pointer to a new url
+  int pos = 0;                // start at beginning of page
+
+  while ((url = webpage_getNextURL(page, &pos)) != NULL) {
+    // check whether it is internal to crawl domain
+    if (IsInternalURL(url)) { // side effect: URL normalized
+      if (hashtable_insert(pages_seen, url, "seen")) {
+        // never seen it before: add it bag to to be crawled
+        webpage_t *new = webpage_new(url, webpage_getDepth(page)+1, NULL);
+        assertp(new, "webpage_new in page_scan");
+        bag_insert(pages_to_crawl, new);
+	// do not free(url) because it is saved in the webpage_t
+      } 
+      else {
+        // ignore it, we've seen it before
+	      free(url);
+      }
+    } else {
+      free(url);
+    }
+  }
+}
+
+
+

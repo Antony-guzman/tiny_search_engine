@@ -11,35 +11,69 @@
 #include "file.h"
 #include <string.h>
 
-bool pagesaver(webpage_t *page, char *pageDir, int ID);
-webpage_t* page_load(const char *pageDir, const int ID);
-bool page_validate(const char* pageDir);
+/**************** file-local global variables ****************/
+static const char crawlerfile[] = ".crawler";
 
+/**************** file-local function prototypes ****************/
+/* none */
 
-/**************** pagec_load() ****************/
-/*see pagedir.h for description */
-bool  pagesaver(webpage_t *page, char *pageDir, int ID)
+/**************** pagedir_init ****************/
+/* see pagedir.h for documentation */
+bool
+pagedir_init(const char *pageDirectory)
 {
-    if (page == NULL || pageDir == NULL || ID < 0){
-            return false;
-    }
-    FILE *fp;
-    char filename[100];
-    sprintf(filename,"%s/%i", pageDir, ID);
+  if (pageDirectory == NULL) {
+    return false;
+  }
 
-    if ((fp = fopen(filename, "w")) != NULL) {
-        // each webpage is saved with a unique id
-        fprintf(fp, "%s\n", webpage_getURL(page)); // first line is the url
-        fprintf(fp, "%d\n", webpage_getDepth(page)); // second line is the depth
-        fprintf(fp, "%s", webpage_getHTML(page)); // rest is the content
-	printf("created file : %i\n",ID);         // print for test file to make sure files are created
-        fclose(fp);
-    }
-    else {
-         return false;
-    }
+  // make a filename
+  int filenamelen = strlen(pageDirectory) + strlen(crawlerfile) + 2;
+  char *filename = assertp(malloc(filenamelen),
+                           "pagedir_init filename");
+  sprintf(filename, "%s/%s", pageDirectory, crawlerfile);
+
+  // now create the file
+  FILE *fp = fopen(filename, "w");
+  if (fp == NULL) {           // file creation failed
+    free(filename);
+    return false;
+  } else {                    // file creation succeeded
+    fclose(fp);
+    free(filename);
     return true;
+  }
 }
+
+/**************** pagedir_save ****************/
+/* see pagedir.h for documentation */
+void 
+page_save(const webpage_t *page, const char *pageDirectory, const int documentID)
+{
+  if (page == NULL) {
+    assertp(NULL, "pagedir_save gets NULL page");
+  }
+  if (pageDirectory == NULL) {
+    assertp(NULL, "pagedir_save gets NULL pageDirectory");
+  }
+  assertp(webpage_getURL(page), "pagedir_save gets NULL url");
+  assertp(webpage_getHTML(page), "pagedir_save gets NULL html");
+
+  // create filename string from page directory and document ID
+  char *filename = assertp(malloc(strlen(pageDirectory)+12), "pagedir_save");
+  sprintf(filename, "%s/%d", pageDirectory, documentID);
+
+  FILE *fp = fopen(filename, "w");
+  assertp(fp, "pagedir_save cannot open file for writing");
+  
+  fprintf(fp, "%s\n%d\n%s\n", 
+          webpage_getURL(page), 
+          webpage_getDepth(page), 
+          webpage_getHTML(page));
+
+  fclose(fp);
+  free(filename);
+}
+
 
 /**************** page_validate() ****************/
 /*see pagedir.h for description */

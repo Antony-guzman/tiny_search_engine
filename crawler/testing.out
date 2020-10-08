@@ -1,0 +1,148 @@
+bash -v testing.sh
+
+
+# Testing script for crawler.c
+# Author: Antony Guzman
+# Inspired by CS50 given example of testing.sh
+# Date: Feb 5, 2020
+#
+# usage: bash -v testing.sh
+
+# Define variables
+seedURL=http://old-www.cs.dartmouth.edu/~cs50/data/tse/letters/index.html
+externalURL=www.google.com
+fakepage=http://old-www.cs.dartmouth.edu/thisdoesntwork.html
+seedURL2=http://old-www.cs.dartmouth.edu/~cs50/data/tse/letters/B.html 
+wikipage=http://old-www.cs.dartmouth.edu/~cs50/data/tse/wikipedia/index.html
+
+# make different directories for different seeds
+mkdir data1
+mkdir data2
+mkdir data3
+
+#####################################
+### These tests should fail ###
+
+# 1 argument
+./crawler
+You must supply 3 arguments.
+The first argument is the seed URL. 
+ The second argument is the target directory. 
+The third argument is the max depth which to crawl.
+
+# 2 arguments
+./crawler $seedURL
+You must supply 3 arguments.
+The first argument is the seed URL. 
+ The second argument is the target directory. 
+The third argument is the max depth which to crawl.
+
+# 3 arguments
+./crawler $seedURL data1
+You must supply 3 arguments.
+The first argument is the seed URL. 
+ The second argument is the target directory. 
+The third argument is the max depth which to crawl.
+
+# 4 arguments + externalURL
+./crawler $externalURL data1 2
+The seedURL must be internal 
+
+# 4 arguments + fakepage
+./crawler $fakepage data1 2
+error: page not fetched
+
+# 4 arguments and nonexisting directory
+./crawler $seedURL not_real 2
+ You must supply an existing and writebale directory. 
+
+######################################
+### These tests should pass ####
+
+# at depth 0
+./crawler $seedURL data1 0
+created file : 1
+
+# at depth 1
+./crawler $seedURL data1 1
+created file : 1
+created file : 2
+
+# at depth 2
+./crawler $seedURL data1 2
+created file : 1
+created file : 2
+created file : 3
+
+# at depth 3
+./crawler $seedURL data1 3
+created file : 1
+created file : 2
+created file : 3
+created file : 4
+created file : 5
+created file : 6
+
+# at depth 4
+./crawler $seedURL data1 4
+created file : 1
+created file : 2
+created file : 3
+created file : 4
+created file : 5
+created file : 6
+created file : 7
+created file : 8
+
+# at depth 5
+./crawler $seedURL data1 5
+created file : 1
+created file : 2
+created file : 3
+created file : 4
+created file : 5
+created file : 6
+created file : 7
+created file : 8
+created file : 9
+
+# at depth 0 wikipedia page
+./crawler $wikipage data2 0
+created file : 1
+
+# at depth 1 wikipedia page
+./crawler $wikipage data2 1
+created file : 1
+created file : 2
+created file : 3
+created file : 4
+created file : 5
+created file : 6
+created file : 7
+
+# at depth 2 wikipedia page
+# WARNING: TAKES EXTREMELY LONG
+# ./crawler $wikipage data2 2
+
+# at depth 0 with seedURL2
+./crawler $seedURL2 data3 0
+created file : 1
+
+# at depth 1 with seed URL2
+./crawler $seedURL2 data3 1
+created file : 1
+created file : 2
+created file : 3
+created file : 4
+created file : 5
+
+
+
+
+
+
+
+
+
+
+

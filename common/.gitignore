@@ -1,0 +1,9 @@
+#dont track files
+stocks
+common.a
+index.o
+index
+pagedir.o
+pagedir
+word.o
+word
